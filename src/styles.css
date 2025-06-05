@@ -148,6 +148,94 @@ html, body {
   background: #218838;
 }
 
+/* Pulse animation for focus indicators */
+@keyframes focusPulse {
+  0% {
+    box-shadow: 0 0 0 3px rgba(74, 158, 255, 0.3);
+    outline-color: #4a9eff;
+  }
+  50% {
+    box-shadow: 0 0 0 6px rgba(74, 158, 255, 0.6);
+    outline-color: #6bb3ff;
+  }
+  100% {
+    box-shadow: 0 0 0 3px rgba(74, 158, 255, 0.3);
+    outline-color: #4a9eff;
+  }
+}
+
+@keyframes focusPulseGreen {
+  0% {
+    box-shadow: 0 0 0 3px rgba(40, 167, 69, 0.3);
+    outline-color: #28a745;
+  }
+  50% {
+    box-shadow: 0 0 0 6px rgba(40, 167, 69, 0.6);
+    outline-color: #34ce57;
+  }
+  100% {
+    box-shadow: 0 0 0 3px rgba(40, 167, 69, 0.3);
+    outline-color: #28a745;
+  }
+}
+
+@keyframes focusPulseGray {
+  0% {
+    box-shadow: 0 0 0 3px rgba(136, 136, 136, 0.3);
+    outline-color: #888;
+  }
+  50% {
+    box-shadow: 0 0 0 6px rgba(136, 136, 136, 0.6);
+    outline-color: #aaa;
+  }
+  100% {
+    box-shadow: 0 0 0 3px rgba(136, 136, 136, 0.3);
+    outline-color: #888;
+  }
+}
+
+@keyframes focusPulseOrange {
+  0% {
+    box-shadow: 0 0 0 3px rgba(255, 152, 0, 0.3);
+    outline-color: #FF9800;
+  }
+  50% {
+    box-shadow: 0 0 0 6px rgba(255, 152, 0, 0.6);
+    outline-color: #ffb74d;
+  }
+  100% {
+    box-shadow: 0 0 0 3px rgba(255, 152, 0, 0.3);
+    outline-color: #FF9800;
+  }
+}
+
+/* Keyboard focus indicator */
+.menu-button.focused {
+  outline: 2px solid #4a9eff;
+  outline-offset: 2px;
+  box-shadow: 0 0 0 3px rgba(74, 158, 255, 0.3);
+  animation: focusPulse 2s ease-in-out infinite;
+}
+
+.menu-button.focused:not(.active):not(.close-menu) {
+  background: #5ba3ff;
+}
+
+.menu-button.focused.active {
+  animation: focusPulseGreen 2s ease-in-out infinite;
+}
+
+/* Close button keeps its gray color when focused */
+.menu-button.close-menu.focused {
+  background: #666;
+  animation: focusPulseGray 2s ease-in-out infinite;
+}
+
+/* FPS toggle button gets special focus styling when active */
+.menu-button#fpsToggleButton.focused.active {
+  animation: focusPulseOrange 2s ease-in-out infinite;
+}
+
 /* FPS Counter */
 .fps-counter {
   position: fixed;
