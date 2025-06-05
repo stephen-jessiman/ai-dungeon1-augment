@@ -69,6 +69,7 @@ export class Game {
     console.log('🎮 Game started successfully!');
     console.log('📊 Press F3 to toggle FPS counter');
     console.log('🎯 Press ESC or click the menu icon to access scene selection');
+    console.log('⌨️  Use Arrow Keys (↑↓) to navigate menu, Enter to select');
   }
 
   /**

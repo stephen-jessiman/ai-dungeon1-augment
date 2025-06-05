@@ -3,7 +3,13 @@ import { DebugSystem } from './debug';
 /**
  * Manages the game's user interface menu system.
  * Handles scene navigation, debug controls, and menu interactions.
- * Provides keyboard shortcuts and visual feedback for user actions.
+ * Provides keyboard shortcuts, arrow key navigation, and visual feedback for user actions.
+ *
+ * Keyboard Controls:
+ * - ESC: Toggle menu open/close
+ * - Arrow Up/Down: Navigate between menu items
+ * - Enter: Activate the currently focused menu item
+ * - F3: Toggle FPS counter (when menu is closed)
  *
  * @example
  * ```typescript
@@ -35,6 +41,12 @@ export class MenuSystem {
   /** The FPS toggle button element */
   private fpsToggleButton?: HTMLElement;
 
+  /** Array of all navigable menu buttons */
+  private menuButtons: HTMLElement[] = [];
+
+  /** Index of the currently focused menu item */
+  private focusedIndex: number = 0;
+
   /**
    * Creates a new MenuSystem instance.
    *
@@ -51,6 +63,7 @@ export class MenuSystem {
     this.fpsToggleButton = document.getElementById('fpsToggleButton')!;
 
     this.setupEventListeners();
+    this.initializeMenuButtons();
     this.updateActiveScene();
     this.updateFPSButtonText();
 
@@ -63,16 +76,43 @@ export class MenuSystem {
   }
 
   /**
+   * Initializes the array of navigable menu buttons in order.
+   * This determines the tab order for keyboard navigation.
+   *
+   * @private
+   */
+  private initializeMenuButtons(): void {
+    this.menuButtons = [];
+
+    // Add scene buttons in order
+    const sceneButtons = document.querySelectorAll('[data-scene]') as NodeListOf<HTMLElement>;
+    sceneButtons.forEach(button => this.menuButtons.push(button));
+
+    // Add FPS toggle button
+    if (this.fpsToggleButton) {
+      this.menuButtons.push(this.fpsToggleButton);
+    }
+
+    // Add close button
+    const closeButton = document.querySelector('.close-menu') as HTMLElement;
+    if (closeButton) {
+      this.menuButtons.push(closeButton);
+    }
+  }
+
+  /**
    * Sets up all event listeners for menu interactions.
    * Handles keyboard shortcuts, button clicks, and menu navigation.
    *
    * @private
    */
   private setupEventListeners(): void {
-    // ESC key listener
+    // Keyboard navigation
     document.addEventListener('keydown', (event) => {
       if (event.key === 'Escape') {
         this.toggleMenu();
+      } else if (this.isMenuOpen) {
+        this.handleMenuKeyboard(event);
       }
     });
 
@@ -112,6 +152,84 @@ export class MenuSystem {
     });
   }
 
+  /**
+   * Handles keyboard navigation within the menu.
+   * Supports arrow keys for navigation and Enter for activation.
+   *
+   * @param event - The keyboard event
+   * @private
+   */
+  private handleMenuKeyboard(event: KeyboardEvent): void {
+    switch (event.key) {
+      case 'ArrowUp':
+        event.preventDefault();
+        this.navigateUp();
+        break;
+      case 'ArrowDown':
+        event.preventDefault();
+        this.navigateDown();
+        break;
+      case 'Enter':
+        event.preventDefault();
+        this.activateCurrentItem();
+        break;
+    }
+  }
+
+  /**
+   * Navigates to the previous menu item.
+   * Wraps around to the last item if at the beginning.
+   *
+   * @private
+   */
+  private navigateUp(): void {
+    this.focusedIndex = (this.focusedIndex - 1 + this.menuButtons.length) % this.menuButtons.length;
+    this.updateFocusedItem();
+  }
+
+  /**
+   * Navigates to the next menu item.
+   * Wraps around to the first item if at the end.
+   *
+   * @private
+   */
+  private navigateDown(): void {
+    this.focusedIndex = (this.focusedIndex + 1) % this.menuButtons.length;
+    this.updateFocusedItem();
+  }
+
+  /**
+   * Activates the currently focused menu item.
+   * Simulates a click on the focused button.
+   *
+   * @private
+   */
+  private activateCurrentItem(): void {
+    const currentButton = this.menuButtons[this.focusedIndex];
+    if (currentButton) {
+      currentButton.click();
+    }
+  }
+
+  /**
+   * Updates the visual focus indicator for the current menu item.
+   * Adds/removes the 'focused' CSS class appropriately.
+   *
+   * @private
+   */
+  private updateFocusedItem(): void {
+    // Remove focus from all buttons
+    this.menuButtons.forEach(button => {
+      button.classList.remove('focused');
+    });
+
+    // Add focus to current button
+    const currentButton = this.menuButtons[this.focusedIndex];
+    if (currentButton) {
+      currentButton.classList.add('focused');
+    }
+  }
+
   private toggleMenu(): void {
     if (this.isMenuOpen) {
       this.closeMenu();
@@ -125,11 +243,20 @@ export class MenuSystem {
     this.popupMenu.classList.remove('hidden');
     this.updateActiveScene();
     this.updateFPSButtonText();
+
+    // Reset focus to first item when opening menu
+    this.focusedIndex = 0;
+    this.updateFocusedItem();
   }
 
   private closeMenu(): void {
     this.isMenuOpen = false;
     this.popupMenu.classList.add('hidden');
+
+    // Clear focus when closing menu
+    this.menuButtons.forEach(button => {
+      button.classList.remove('focused');
+    });
   }
 
   private selectScene(sceneId: string): void {
