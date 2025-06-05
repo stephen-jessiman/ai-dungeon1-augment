@@ -11,7 +11,7 @@
  */
 export class DebugSystem {
   /** HTML element displaying the FPS counter */
-  private fpsElement: HTMLElement;
+  private fpsElement?: HTMLElement;
 
   /** Whether the debug information is currently visible */
   private isVisible: boolean = false;
@@ -31,6 +31,9 @@ export class DebugSystem {
   /** Optional callback function called when FPS counter is toggled */
   private onToggleCallback?: () => void;
 
+  /** Keydown event handler for F3 key */
+  private keydownHandler: (event: KeyboardEvent) => void;
+
   /**
    * Creates a new DebugSystem instance.
    * Automatically creates the FPS display element and sets up keyboard listeners.
@@ -46,6 +49,11 @@ export class DebugSystem {
    * @private
    */
   private createFPSElement(): void {
+    // check that the counter doesnt exist
+    if (document.getElementById('fpsCounter')) {
+      return;
+    }
+
     // Create FPS counter element
     this.fpsElement = document.createElement('div');
     this.fpsElement.id = 'fpsCounter';
@@ -61,12 +69,13 @@ export class DebugSystem {
    */
   private setupEventListeners(): void {
     // F3 key to toggle FPS counter
-    document.addEventListener('keydown', (event) => {
+    this.keydownHandler = (event) => {
       if (event.key === 'F3') {
         event.preventDefault();
         this.toggleFPS();
       }
-    });
+    };
+    document.addEventListener('keydown', this.keydownHandler);
   }
 
   /**
@@ -78,10 +87,10 @@ export class DebugSystem {
    */
   public toggleFPS(): void {
     this.isVisible = !this.isVisible;
-    if (this.isVisible) {
+    if (this.fpsElement && this.isVisible) {
       this.fpsElement.classList.remove('hidden');
       console.log('FPS counter enabled (Press F3 to toggle)');
-    } else {
+    } else if (this.fpsElement) {
       this.fpsElement.classList.add('hidden');
       console.log('FPS counter disabled');
     }
@@ -114,7 +123,7 @@ export class DebugSystem {
     if (deltaTime >= this.updateInterval) {
       this.fps = Math.round((this.frameCount * 1000) / deltaTime);
 
-      if (this.isVisible) {
+      if (this.isVisible && this.fpsElement) {
         this.fpsElement.innerHTML = `FPS: ${this.fps}`;
 
         // Color coding based on FPS
@@ -172,5 +181,6 @@ export class DebugSystem {
    */
   public dispose(): void {
     this.fpsElement?.parentNode?.removeChild(this.fpsElement);
+    document.removeEventListener('keydown', this.keydownHandler);
   }
 }
