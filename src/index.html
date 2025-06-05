@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="UTF-8" />
+    <title>Babylon.js Game</title>
+    <link rel="stylesheet" href="/styles.css">
+  </head>
+  <body>
+    <canvas id="renderCanvas"></canvas>
+
+    <!-- Menu Icon -->
+    <div id="menuIcon" class="menu-icon">
+      <div class="hamburger">
+        <span></span>
+        <span></span>
+        <span></span>
+      </div>
+    </div>
+
+    <!-- Popup Menu -->
+    <div id="popupMenu" class="popup-menu hidden">
+      <div class="menu-content">
+        <h2>Game Menu</h2>
+        <div class="menu-section">
+          <h3>Scenes</h3>
+          <button class="menu-button" data-scene="scene1">Scene 1 - Spinning Cube</button>
+          <button class="menu-button" data-scene="scene2">Scene 2 - Bouncing Sphere</button>
+          <button class="menu-button" data-scene="scene3">Scene 3 - Coming Soon</button>
+        </div>
+        <div class="menu-section">
+          <button class="menu-button close-menu">Close Menu</button>
+        </div>
+      </div>
+    </div>
+
+    <script type="module" src="/main.ts"></script>
+  </body>
+</html>

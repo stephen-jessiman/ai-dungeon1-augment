@@ -1,0 +1,18 @@
+{
+  "name": "babylon-game-starter",
+  "version": "1.0.0",
+  "description": "Simple Babylon.js game starter",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "preview": "vite preview"
+  },
+  "devDependencies": {
+    "typescript": "^5.6.0",
+    "vite": "^5.0.0"
+  },
+  "dependencies": {
+    "babylonjs": "^6.15.0"
+  }
+}
