@@ -1,14 +1,46 @@
 import { DebugSystem } from './debug';
 
+/**
+ * Manages the game's user interface menu system.
+ * Handles scene navigation, debug controls, and menu interactions.
+ * Provides keyboard shortcuts and visual feedback for user actions.
+ *
+ * @example
+ * ```typescript
+ * const menuSystem = new MenuSystem(
+ *   (sceneId) => switchToScene(sceneId),
+ *   debugSystem
+ * );
+ * ```
+ */
 export class MenuSystem {
+  /** The popup menu container element */
   private popupMenu: HTMLElement;
+
+  /** The menu icon/hamburger button element */
   private menuIcon: HTMLElement;
+
+  /** Whether the menu is currently open */
   private isMenuOpen: boolean = false;
+
+  /** Callback function called when a scene is selected */
   private onSceneChange?: (sceneId: string) => void;
+
+  /** The ID of the currently active scene */
   private currentScene: string = 'scene1';
+
+  /** Reference to the debug system for FPS counter control */
   private debugSystem?: DebugSystem;
+
+  /** The FPS toggle button element */
   private fpsToggleButton?: HTMLElement;
 
+  /**
+   * Creates a new MenuSystem instance.
+   *
+   * @param onSceneChangeCallback - Optional callback function called when a scene is selected
+   * @param debugSystem - Optional debug system for FPS counter integration
+   */
   constructor(onSceneChangeCallback?: (sceneId: string) => void, debugSystem?: DebugSystem) {
     this.onSceneChange = onSceneChangeCallback;
     this.debugSystem = debugSystem;
@@ -30,6 +62,12 @@ export class MenuSystem {
     }
   }
 
+  /**
+   * Sets up all event listeners for menu interactions.
+   * Handles keyboard shortcuts, button clicks, and menu navigation.
+   *
+   * @private
+   */
   private setupEventListeners(): void {
     // ESC key listener
     document.addEventListener('keydown', (event) => {
@@ -117,10 +155,23 @@ export class MenuSystem {
     activeButton?.classList.add('active');
   }
 
+  /**
+   * Gets the ID of the currently active scene.
+   *
+   * @returns The current scene ID
+   * @public
+   */
   public getCurrentScene(): string {
     return this.currentScene;
   }
 
+  /**
+   * Sets the current scene and updates the menu UI.
+   * Updates the visual indicators to show which scene is active.
+   *
+   * @param sceneId - The ID of the scene to set as current
+   * @public
+   */
   public setCurrentScene(sceneId: string): void {
     this.currentScene = sceneId;
     this.updateActiveScene();
