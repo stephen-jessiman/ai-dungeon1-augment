@@ -1,19 +1,33 @@
+import { DebugSystem } from './debug';
+
 export class MenuSystem {
   private popupMenu: HTMLElement;
   private menuIcon: HTMLElement;
   private isMenuOpen: boolean = false;
   private onSceneChange?: (sceneId: string) => void;
   private currentScene: string = 'scene1';
+  private debugSystem?: DebugSystem;
+  private fpsToggleButton?: HTMLElement;
 
-  constructor(onSceneChangeCallback?: (sceneId: string) => void) {
+  constructor(onSceneChangeCallback?: (sceneId: string) => void, debugSystem?: DebugSystem) {
     this.onSceneChange = onSceneChangeCallback;
-    
+    this.debugSystem = debugSystem;
+
     // Get menu elements
     this.popupMenu = document.getElementById('popupMenu')!;
     this.menuIcon = document.getElementById('menuIcon')!;
-    
+    this.fpsToggleButton = document.getElementById('fpsToggleButton')!;
+
     this.setupEventListeners();
     this.updateActiveScene();
+    this.updateFPSButtonText();
+
+    // Set up callback for when FPS is toggled via F3
+    if (this.debugSystem) {
+      this.debugSystem.setOnToggleCallback(() => {
+        this.updateFPSButtonText();
+      });
+    }
   }
 
   private setupEventListeners(): void {
@@ -53,6 +67,11 @@ export class MenuSystem {
     closeButton?.addEventListener('click', () => {
       this.closeMenu();
     });
+
+    // FPS toggle button
+    this.fpsToggleButton?.addEventListener('click', () => {
+      this.toggleFPS();
+    });
   }
 
   private toggleMenu(): void {
@@ -67,6 +86,7 @@ export class MenuSystem {
     this.isMenuOpen = true;
     this.popupMenu.classList.remove('hidden');
     this.updateActiveScene();
+    this.updateFPSButtonText();
   }
 
   private closeMenu(): void {
@@ -104,5 +124,28 @@ export class MenuSystem {
   public setCurrentScene(sceneId: string): void {
     this.currentScene = sceneId;
     this.updateActiveScene();
+  }
+
+  private toggleFPS(): void {
+    if (this.debugSystem) {
+      this.debugSystem.toggleFPS();
+      this.updateFPSButtonText();
+    }
+  }
+
+  private updateFPSButtonText(): void {
+    if (this.fpsToggleButton && this.debugSystem) {
+      const isVisible = this.debugSystem.isDebugVisible();
+      this.fpsToggleButton.textContent = isVisible
+        ? 'Hide FPS Counter (F3)'
+        : 'Show FPS Counter (F3)';
+
+      // Add visual indicator for active state
+      if (isVisible) {
+        this.fpsToggleButton.classList.add('active');
+      } else {
+        this.fpsToggleButton.classList.remove('active');
+      }
+    }
   }
 }
