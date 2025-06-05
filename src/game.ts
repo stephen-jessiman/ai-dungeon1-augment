@@ -31,13 +31,18 @@ export class Game {
     // Initialize menu system
     this.menuSystem = new MenuSystem((sceneId: string) => {
       this.switchToScene(sceneId);
-    });
+    }, this.sceneManager.getDebugSystem());
 
     // Start with Scene 1
     this.sceneManager.switchToScene('scene1');
 
     // Start the render loop
     this.sceneManager.startRenderLoop();
+
+    // Log helpful information
+    console.log('🎮 Game started successfully!');
+    console.log('📊 Press F3 to toggle FPS counter');
+    console.log('🎯 Press ESC or click the menu icon to access scene selection');
   }
 
   private registerScenes(): void {

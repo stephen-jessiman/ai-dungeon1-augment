@@ -147,3 +147,41 @@ html, body {
 .menu-button.active:hover {
   background: #218838;
 }
+
+/* FPS Counter */
+.fps-counter {
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  z-index: 1000;
+  background: rgba(0, 0, 0, 0.8);
+  color: white;
+  padding: 8px 12px;
+  border-radius: 6px;
+  font-family: 'Courier New', monospace;
+  font-size: 14px;
+  font-weight: bold;
+  border: 2px solid #333;
+  min-width: 80px;
+  text-align: center;
+  transition: all 0.3s ease;
+}
+
+.fps-counter.hidden {
+  display: none;
+}
+
+.fps-counter.fps-good {
+  border-color: #4CAF50;
+  color: #4CAF50;
+}
+
+.fps-counter.fps-ok {
+  border-color: #FF9800;
+  color: #FF9800;
+}
+
+.fps-counter.fps-poor {
+  border-color: #F44336;
+  color: #F44336;
+}
