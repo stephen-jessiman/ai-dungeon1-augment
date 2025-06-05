@@ -88,8 +88,6 @@ export class DebugSystem {
   }
 
   public dispose(): void {
-    if (this.fpsElement && this.fpsElement.parentNode) {
-      this.fpsElement.parentNode.removeChild(this.fpsElement);
-    }
+    this.fpsElement?.parentNode?.removeChild(this.fpsElement);
   }
 }
