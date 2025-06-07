@@ -18,11 +18,14 @@ import { DungeonGenerator, DungeonData, DungeonConfig } from '../dungeonGenerato
  * - Performance-optimized mesh generation
  * 
  * Controls:
- * - WASD: Move camera
- * - Mouse: Look around
- * - G: Generate new dungeon
- * - 1-5: Change complexity level
- * - R: Toggle room visualization mode
+ * - WASD: Move camera (top-down view)
+ * - Mouse wheel: Zoom in/out
+ * - G: Generate new dungeon (new layout, preserves camera position)
+ * - 1-5: Change complexity level (preserves base rooms & camera position)
+ * - R: Toggle room visualization mode (preserves camera position)
+ * - V: Toggle walls visibility
+ * - 6-0: Set corridor width (6=1, 7=2, 8=3, 9=4, 0=5, preserves base rooms & camera)
+ * - C: Center camera on dungeon
  */
 export class Scene3 implements GameScene {
   /** Unique identifier for this scene */
@@ -45,7 +48,6 @@ export class Scene3 implements GameScene {
     wall: BABYLON.StandardMaterial;
     floor: BABYLON.StandardMaterial;
     door: BABYLON.StandardMaterial;
-    ceiling: BABYLON.StandardMaterial;
   } | null = null;
   
   /** Camera for first-person exploration */
@@ -53,25 +55,45 @@ export class Scene3 implements GameScene {
   
   /** Current visualization mode */
   private visualizationMode: 'full' | 'wireframe' | 'rooms' = 'full';
-  
+
+  /** Whether walls are currently visible */
+  private showWalls: boolean = true;
+
+  /** Current corridor width (1-5) */
+  private corridorWidth: number = 3; // Match default config
+
+  /** Current complexity level (0.2-1.0) */
+  private currentComplexity: number = 0.6; // Match default config
+
   /** Tile size in 3D units */
   private readonly tileSize = 2;
-  
-  /** Wall height in 3D units */
-  private readonly wallHeight = 3;
+
+  /** Wall height in 3D units (reduced for top-down view) */
+  private readonly wallHeight = 1.5;
+
+  /** WASD movement state tracking */
+  private movementKeys = {
+    w: false,
+    a: false,
+    s: false,
+    d: false
+  };
+
+  /** Camera movement speed */
+  private readonly cameraSpeed = 1.0;
 
   constructor() {
-    // Initialize with default configuration
+    // Initialize with default configuration (larger size to accommodate wide corridors)
     const defaultConfig: DungeonConfig = {
-      dungeonWidth: 40,
-      dungeonHeight: 40,
-      minRooms: 6,
-      maxRooms: 12,
+      dungeonWidth: 60,
+      dungeonHeight: 60,
+      minRooms: 3,
+      maxRooms: 15,
       minRoomSize: 4,
       maxRoomSize: 10,
       complexityLevel: 0.6,
-      corridorWidth: 1,
-      overlapChance: 0.3,
+      corridorWidth: 3,
+      overlapChance: 0.4,
       seed: Date.now()
     };
     
@@ -93,18 +115,24 @@ export class Scene3 implements GameScene {
     scene.gravity = new BABYLON.Vector3(0, -9.81, 0);
     scene.collisionsEnabled = true;
     
-    // Create camera
-    this.camera = new BABYLON.UniversalCamera("camera", 
-      new BABYLON.Vector3(5, 2, 5), scene);
-    this.camera.setTarget(BABYLON.Vector3.Zero());
-    this.camera.attachControl(canvas, true);
-    this.camera.checkCollisions = true;
-    this.camera.applyGravity = true;
-    this.camera.ellipsoid = new BABYLON.Vector3(0.5, 1, 0.5);
-    
-    // Set camera movement speed
-    this.camera.speed = 0.5;
-    this.camera.angularSensibility = 2000;
+    // Create top-down camera
+    this.camera = new BABYLON.UniversalCamera("camera",
+      new BABYLON.Vector3(0, 50, 0), scene);
+
+    // Disable default controls since we'll implement custom WASD
+    this.camera.attachControl(canvas, false);
+
+    // Disable collision and gravity for top-down view
+    this.camera.checkCollisions = false;
+    this.camera.applyGravity = false;
+
+    // Disable default camera inputs
+    this.camera.inputs.clear();
+
+    // Lock camera to top-down view (set rotation directly)
+    this.camera.rotation.x = Math.PI / 2; // Look straight down
+    this.camera.rotation.y = 0;
+    this.camera.rotation.z = 0;
     
     // Create lighting
     this.setupLighting(scene);
@@ -114,8 +142,8 @@ export class Scene3 implements GameScene {
     
     // Generate initial dungeon
     this.generateNewDungeon();
-    this.visualizeDungeon(scene);
-    
+    this.visualizeDungeon(scene, true); // Force initial camera positioning
+
     // Setup keyboard controls
     this.setupControls(scene);
     
@@ -126,26 +154,26 @@ export class Scene3 implements GameScene {
   }
 
   /**
-   * Sets up atmospheric lighting for the dungeon.
+   * Sets up lighting optimized for top-down view.
    * @private
    */
   private setupLighting(scene: BABYLON.Scene): void {
-    // Ambient light for general illumination
-    const ambientLight = new BABYLON.HemisphericLight("ambientLight", 
+    // Bright ambient light for clear top-down visibility
+    const ambientLight = new BABYLON.HemisphericLight("ambientLight",
       new BABYLON.Vector3(0, 1, 0), scene);
-    ambientLight.intensity = 0.3;
-    ambientLight.diffuse = new BABYLON.Color3(0.8, 0.8, 1.0);
-    
-    // Directional light for shadows and depth
-    const directionalLight = new BABYLON.DirectionalLight("directionalLight", 
-      new BABYLON.Vector3(-1, -1, -1), scene);
-    directionalLight.intensity = 0.7;
-    directionalLight.diffuse = new BABYLON.Color3(1.0, 0.9, 0.7);
-    
-    // Enable shadows
+    ambientLight.intensity = 0.8;
+    ambientLight.diffuse = new BABYLON.Color3(1.0, 1.0, 1.0);
+
+    // Directional light from above for top-down shadows
+    const directionalLight = new BABYLON.DirectionalLight("directionalLight",
+      new BABYLON.Vector3(0, -1, 0), scene);
+    directionalLight.intensity = 0.5;
+    directionalLight.diffuse = new BABYLON.Color3(1.0, 1.0, 1.0);
+
+    // Enable shadows for depth perception
     const shadowGenerator = new BABYLON.ShadowGenerator(1024, directionalLight);
     shadowGenerator.useBlurExponentialShadowMap = true;
-    shadowGenerator.blurKernel = 32;
+    shadowGenerator.blurKernel = 16;
   }
 
   /**
@@ -170,18 +198,11 @@ export class Scene3 implements GameScene {
     doorMaterial.diffuseColor = new BABYLON.Color3(0.6, 0.3, 0.1);
     doorMaterial.specularColor = new BABYLON.Color3(0.2, 0.1, 0.05);
     doorMaterial.roughness = 0.7;
-    
-    // Ceiling material - darker stone
-    const ceilingMaterial = new BABYLON.StandardMaterial("ceilingMaterial", scene);
-    ceilingMaterial.diffuseColor = new BABYLON.Color3(0.2, 0.2, 0.3);
-    ceilingMaterial.specularColor = new BABYLON.Color3(0.05, 0.05, 0.05);
-    ceilingMaterial.roughness = 0.9;
-    
+
     this.materials = {
       wall: wallMaterial,
       floor: floorMaterial,
-      door: doorMaterial,
-      ceiling: ceilingMaterial
+      door: doorMaterial
     };
   }
 
@@ -192,54 +213,145 @@ export class Scene3 implements GameScene {
   private setupControls(scene: BABYLON.Scene): void {
     scene.actionManager = new BABYLON.ActionManager(scene);
     
-    // G key - Generate new dungeon
+    // G key - Generate new dungeon (preserve camera position)
     scene.actionManager.registerAction(new BABYLON.ExecuteCodeAction(
       BABYLON.ActionManager.OnKeyDownTrigger, (evt) => {
         if (evt.sourceEvent.key === 'g' || evt.sourceEvent.key === 'G') {
           this.generateNewDungeon();
-          this.visualizeDungeon(scene);
-          console.log('🏰 New dungeon generated!');
+          this.visualizeDungeon(scene, false); // Don't reposition camera
+          console.log('🏰 New dungeon generated! (Camera position preserved)');
         }
       }));
-    
-    // Number keys 1-5 - Change complexity level
+
+    // Number keys 1-5 - Change complexity level (preserve camera position and base rooms)
     for (let i = 1; i <= 5; i++) {
       scene.actionManager.registerAction(new BABYLON.ExecuteCodeAction(
         BABYLON.ActionManager.OnKeyDownTrigger, (evt) => {
           if (evt.sourceEvent.key === i.toString()) {
             const complexity = i * 0.2;
             this.updateComplexity(complexity);
-            this.generateNewDungeon();
-            this.visualizeDungeon(scene);
-            console.log(`🎛️ Complexity set to ${complexity.toFixed(1)}`);
+            this.generateDungeonWithComplexity(); // Preserve base rooms
+            this.visualizeDungeon(scene, false); // Don't reposition camera
+            console.log(`🎛️ Complexity set to ${complexity.toFixed(1)} (Base rooms preserved)`);
           }
         }));
     }
-    
-    // R key - Toggle visualization mode
+
+    // R key - Toggle visualization mode (preserve camera position)
     scene.actionManager.registerAction(new BABYLON.ExecuteCodeAction(
       BABYLON.ActionManager.OnKeyDownTrigger, (evt) => {
         if (evt.sourceEvent.key === 'r' || evt.sourceEvent.key === 'R') {
           this.toggleVisualizationMode();
-          this.visualizeDungeon(scene);
-          console.log(`👁️ Visualization mode: ${this.visualizationMode}`);
+          this.visualizeDungeon(scene, false); // Don't reposition camera
+          console.log(`👁️ Visualization mode: ${this.visualizationMode} (Camera position preserved)`);
         }
       }));
+
+    // C key - Center camera on dungeon
+    scene.actionManager.registerAction(new BABYLON.ExecuteCodeAction(
+      BABYLON.ActionManager.OnKeyDownTrigger, (evt) => {
+        if (evt.sourceEvent.key === 'c' || evt.sourceEvent.key === 'C') {
+          this.positionCamera(true); // Force reposition to center
+          console.log('📍 Camera centered on dungeon');
+        }
+      }));
+
+    // V key - Toggle walls visibility
+    scene.actionManager.registerAction(new BABYLON.ExecuteCodeAction(
+      BABYLON.ActionManager.OnKeyDownTrigger, (evt) => {
+        if (evt.sourceEvent.key === 'v' || evt.sourceEvent.key === 'V') {
+          this.toggleWalls();
+          this.visualizeDungeon(scene, false); // Don't reposition camera
+          console.log(`🧱 Walls ${this.showWalls ? 'shown' : 'hidden'}`);
+        }
+      }));
+
+    // Number keys 6-0 - Change corridor width (6=1, 7=2, 8=3, 9=4, 0=5)
+    scene.actionManager.registerAction(new BABYLON.ExecuteCodeAction(
+      BABYLON.ActionManager.OnKeyDownTrigger, (evt) => {
+        const keyToWidth: { [key: string]: number } = {
+          '6': 1, '7': 2, '8': 3, '9': 4, '0': 5
+        };
+
+        if (evt.sourceEvent.key in keyToWidth) {
+          const width = keyToWidth[evt.sourceEvent.key];
+          this.setCorridorWidth(width);
+          this.generateDungeonWithComplexity(); // Regenerate with new corridor width
+          this.visualizeDungeon(scene, false); // Don't reposition camera
+          console.log(`🛤️ Corridor width set to ${width} (Complexity ${this.currentComplexity.toFixed(1)} preserved, Base rooms preserved)`);
+        }
+      }));
+
+    // WASD movement controls
+    this.setupWASDControls(scene);
+
+    // Mouse wheel zoom for top-down view
+    scene.onPointerObservable.add((pointerInfo) => {
+      if (pointerInfo.type === BABYLON.PointerEventTypes.POINTERWHEEL) {
+        const event = pointerInfo.event as WheelEvent;
+        this.handleZoom(event.deltaY);
+      }
+    });
+  }
+
+  /**
+   * Sets up WASD movement controls for the top-down camera.
+   * @private
+   */
+  private setupWASDControls(scene: BABYLON.Scene): void {
+    // Key down events
+    scene.actionManager.registerAction(new BABYLON.ExecuteCodeAction(
+      BABYLON.ActionManager.OnKeyDownTrigger, (evt) => {
+        const key = evt.sourceEvent.key.toLowerCase();
+        if (key in this.movementKeys) {
+          this.movementKeys[key as keyof typeof this.movementKeys] = true;
+        }
+      }));
+
+    // Key up events
+    scene.actionManager.registerAction(new BABYLON.ExecuteCodeAction(
+      BABYLON.ActionManager.OnKeyUpTrigger, (evt) => {
+        const key = evt.sourceEvent.key.toLowerCase();
+        if (key in this.movementKeys) {
+          this.movementKeys[key as keyof typeof this.movementKeys] = false;
+        }
+      }));
+  }
+
+  /**
+   * Handles zoom functionality for the top-down camera.
+   * @private
+   */
+  private handleZoom(deltaY: number): void {
+    if (!this.camera) return;
+
+    const zoomSpeed = 2;
+    const minHeight = 10;
+    const maxHeight = 200;
+
+    // Zoom in/out by adjusting camera height
+    this.camera.position.y += deltaY > 0 ? zoomSpeed : -zoomSpeed;
+
+    // Clamp camera height
+    this.camera.position.y = Math.max(minHeight, Math.min(maxHeight, this.camera.position.y));
   }
 
   /**
    * Creates UI instructions for the scene.
    * @private
    */
-  private createUI(scene: BABYLON.Scene): void {
+  private createUI(_scene: BABYLON.Scene): void {
     // This would typically create GUI elements
     // For now, we'll log the controls to console
-    console.log('🎮 Dungeon Scene Controls:');
-    console.log('  G - Generate new dungeon');
-    console.log('  1-5 - Set complexity level (0.2 - 1.0)');
-    console.log('  R - Toggle visualization mode');
-    console.log('  WASD - Move camera');
-    console.log('  Mouse - Look around');
+    console.log('🎮 Dungeon Scene Controls (Top-Down View):');
+    console.log('  G - Generate new dungeon (new layout, preserves camera)');
+    console.log('  1-5 - Set complexity level (preserves rooms & camera)');
+    console.log('  R - Toggle visualization mode (preserves camera)');
+    console.log('  V - Toggle walls visibility');
+    console.log('  6-0 - Set corridor width (6=1, 7=2, 8=3, 9=4, 0=5)');
+    console.log('  C - Center camera on dungeon');
+    console.log('  WASD - Move camera around (smooth movement)');
+    console.log('  Mouse wheel - Zoom in/out');
   }
 
   /**
@@ -247,15 +359,35 @@ export class Scene3 implements GameScene {
    * @private
    */
   private generateNewDungeon(): void {
-    // Update seed for variety
+    // Update seed for variety and clear base rooms for completely new layout
     const config = this.dungeonGenerator.getConfig();
     config.seed = Date.now();
     this.dungeonGenerator.updateConfig(config);
-    
-    // Generate the dungeon
-    this.currentDungeon = this.dungeonGenerator.generate();
-    
+
+    // Sync currentComplexity and corridorWidth with the actual config
+    this.currentComplexity = config.complexityLevel;
+    this.corridorWidth = config.corridorWidth;
+
+    // Debug: Log initial state
+    console.log(`🏰 New dungeon - currentComplexity: ${this.currentComplexity}, corridorWidth: ${this.corridorWidth}, config: `, config);
+
+    // Generate the dungeon (this will create new base rooms)
+    this.currentDungeon = this.dungeonGenerator.generate(false);
+
     console.log(`Generated dungeon: ${this.currentDungeon.metadata.roomCount} rooms, ` +
+                `${this.currentDungeon.doors.length} doors`);
+  }
+
+  /**
+   * Generates a dungeon with new complexity but preserving base room layout.
+   * @private
+   */
+  private generateDungeonWithComplexity(): void {
+    // Generate dungeon preserving base rooms if they exist
+    const preserveRooms = this.dungeonGenerator.hasBaseRooms();
+    this.currentDungeon = this.dungeonGenerator.generate(preserveRooms);
+
+    console.log(`Generated dungeon with preserved rooms: ${this.currentDungeon.metadata.roomCount} rooms, ` +
                 `${this.currentDungeon.doors.length} doors`);
   }
 
@@ -264,7 +396,19 @@ export class Scene3 implements GameScene {
    * @private
    */
   private updateComplexity(complexity: number): void {
-    this.dungeonGenerator.updateConfig({ complexityLevel: complexity });
+    this.currentComplexity = complexity;
+
+    // Debug: Log current state before complexity update
+    console.log(`🎛️ Before complexity update - currentComplexity: ${this.currentComplexity}, corridorWidth: ${this.corridorWidth}, config: `, this.dungeonGenerator.getConfig());
+
+    // Preserve corridor width when updating complexity
+    const config = this.dungeonGenerator.getConfig();
+    config.complexityLevel = complexity;
+    config.corridorWidth = this.corridorWidth; // Ensure corridor width is preserved
+    this.dungeonGenerator.updateConfig(config);
+
+    // Debug: Log state after complexity update
+    console.log(`🎛️ After complexity update - currentComplexity: ${this.currentComplexity}, corridorWidth: ${this.corridorWidth}, config: `, this.dungeonGenerator.getConfig());
   }
 
   /**
@@ -278,17 +422,50 @@ export class Scene3 implements GameScene {
   }
 
   /**
-   * Visualizes the current dungeon in 3D.
+   * Toggles wall visibility.
    * @private
    */
-  private visualizeDungeon(scene: BABYLON.Scene): void {
+  private toggleWalls(): void {
+    this.showWalls = !this.showWalls;
+  }
+
+  /**
+   * Sets the corridor width and updates the dungeon generator.
+   * Preserves the current complexity level.
+   * @private
+   */
+  private setCorridorWidth(width: number): void {
+    const oldWidth = this.corridorWidth;
+    this.corridorWidth = width;
+
+    // Debug: Log current state before update
+    console.log(`🛤️ Setting corridor width from ${oldWidth} to ${width}`);
+    console.log(`🛤️ Before update - currentComplexity: ${this.currentComplexity}, corridorWidth: ${this.corridorWidth}, config: `, this.dungeonGenerator.getConfig());
+
+    // Update the dungeon generator configuration while preserving complexity
+    const config = this.dungeonGenerator.getConfig();
+    config.corridorWidth = width;
+    config.complexityLevel = this.currentComplexity; // Preserve current complexity
+    this.dungeonGenerator.updateConfig(config);
+
+    // Debug: Log state after update
+    console.log(`🛤️ After update - currentComplexity: ${this.currentComplexity}, corridorWidth: ${this.corridorWidth}, config: `, this.dungeonGenerator.getConfig());
+  }
+
+  /**
+   * Visualizes the current dungeon in 3D.
+   * @param scene - The Babylon.js scene
+   * @param forceRepositionCamera - Whether to force camera repositioning (default: false)
+   * @private
+   */
+  private visualizeDungeon(scene: BABYLON.Scene, forceRepositionCamera: boolean = false): void {
     if (!this.currentDungeon || !this.materials) return;
 
     // Clear existing meshes
     this.clearDungeonMeshes();
 
-    // Position camera at a good starting location
-    this.positionCamera();
+    // Position camera (preserve position unless forced)
+    this.positionCamera(forceRepositionCamera);
 
     switch (this.visualizationMode) {
       case 'full':
@@ -316,24 +493,39 @@ export class Scene3 implements GameScene {
 
   /**
    * Positions the camera at a good starting location in the dungeon.
+   * Centers the top-down view over the entire dungeon with a zoomed-out perspective.
+   * Only repositions if this is the initial setup, preserves position otherwise.
    * @private
    */
-  private positionCamera(): void {
+  private positionCamera(forceReposition: boolean = false): void {
     if (!this.currentDungeon || !this.camera) return;
 
-    // Find the first room and position camera there
-    const firstRoom = this.currentDungeon.rooms.find(r => r.type === 'room');
-    if (firstRoom) {
-      const centerX = (firstRoom.x + firstRoom.width / 2) * this.tileSize;
-      const centerZ = (firstRoom.y + firstRoom.height / 2) * this.tileSize;
-
-      this.camera.position = new BABYLON.Vector3(centerX, 2, centerZ);
-      this.camera.setTarget(new BABYLON.Vector3(centerX, 2, centerZ - 5));
+    // Only reposition camera on initial setup or when forced
+    if (!forceReposition && this.camera.position.y > 0) {
+      // Just ensure we're still looking straight down
+      this.camera.rotation.x = Math.PI / 2;
+      this.camera.rotation.y = 0;
+      this.camera.rotation.z = 0;
+      return;
     }
+
+    // Calculate dungeon center
+    const dungeonCenterX = (this.currentDungeon.metadata.width / 2) * this.tileSize;
+    const dungeonCenterZ = (this.currentDungeon.metadata.height / 2) * this.tileSize;
+
+    // Position camera high above the center for top-down view (more zoomed out)
+    const cameraHeight = Math.max(this.currentDungeon.metadata.width, this.currentDungeon.metadata.height) * this.tileSize * 1.2;
+
+    this.camera.position = new BABYLON.Vector3(dungeonCenterX, cameraHeight, dungeonCenterZ);
+
+    // Set top-down orientation directly without using setTarget
+    this.camera.rotation.x = Math.PI / 2; // Look straight down
+    this.camera.rotation.y = 0;
+    this.camera.rotation.z = 0;
   }
 
   /**
-   * Creates full 3D visualization with walls, floors, and ceilings.
+   * Creates full 3D visualization with walls and floors (no ceiling for top-down view).
    * @private
    */
   private createFullVisualization(scene: BABYLON.Scene): void {
@@ -343,11 +535,13 @@ export class Scene3 implements GameScene {
     const width = this.currentDungeon.metadata.width;
     const height = this.currentDungeon.metadata.height;
 
-    // Create floor and ceiling for all walkable areas
-    this.createFloorAndCeiling(scene, tilemap, width, height);
+    // Create floors for all walkable areas (no ceiling needed for top-down)
+    this.createFloors(scene, tilemap, width, height);
 
-    // Create walls
-    this.createWalls(scene, tilemap, width, height);
+    // Create walls (only if walls are enabled)
+    if (this.showWalls) {
+      this.createWalls(scene, tilemap, width, height);
+    }
 
     // Create doors
     this.createDoors(scene);
@@ -380,15 +574,14 @@ export class Scene3 implements GameScene {
   }
 
   /**
-   * Creates floor and ceiling meshes for walkable areas.
+   * Creates floor meshes for walkable areas (optimized for top-down view).
    * @private
    */
-  private createFloorAndCeiling(scene: BABYLON.Scene, tilemap: number[][], width: number, height: number): void {
+  private createFloors(scene: BABYLON.Scene, tilemap: number[][], width: number, height: number): void {
     if (!this.materials) return;
 
     // Create merged floor mesh for performance
     const floorMeshes: BABYLON.Mesh[] = [];
-    const ceilingMeshes: BABYLON.Mesh[] = [];
 
     for (let y = 0; y < height; y++) {
       for (let x = 0; x < width; x++) {
@@ -400,14 +593,6 @@ export class Scene3 implements GameScene {
           floor.material = this.materials.floor;
           floor.receiveShadows = true;
           floorMeshes.push(floor);
-
-          // Create ceiling tile
-          const ceiling = BABYLON.MeshBuilder.CreateGround(`ceiling_${x}_${y}`,
-            { width: this.tileSize, height: this.tileSize }, scene);
-          ceiling.position = new BABYLON.Vector3(x * this.tileSize, this.wallHeight, y * this.tileSize);
-          ceiling.rotation.x = Math.PI; // Flip to face down
-          ceiling.material = this.materials.ceiling;
-          ceilingMeshes.push(ceiling);
         }
       }
     }
@@ -418,14 +603,6 @@ export class Scene3 implements GameScene {
       if (mergedFloor) {
         mergedFloor.name = "mergedFloor";
         this.dungeonMeshes.push(mergedFloor);
-      }
-    }
-
-    if (ceilingMeshes.length > 0) {
-      const mergedCeiling = BABYLON.Mesh.MergeMeshes(ceilingMeshes);
-      if (mergedCeiling) {
-        mergedCeiling.name = "mergedCeiling";
-        this.dungeonMeshes.push(mergedCeiling);
       }
     }
   }
@@ -572,16 +749,50 @@ export class Scene3 implements GameScene {
 
   /**
    * Updates the scene each frame.
-   * Currently no animations, but could be used for dynamic elements.
+   * Handles WASD camera movement and could be used for dynamic elements.
    *
-   * @param _scene - The current Babylon.js scene (unused)
+   * @param scene - The current Babylon.js scene
    * @public
    */
-  public update(_scene: BABYLON.Scene): void {
-    // No animations currently, but could add:
+  public update(scene: BABYLON.Scene): void {
+    // Update camera movement based on WASD keys
+    this.updateCameraMovement(scene);
+
+    // Could add other animations:
     // - Torch flickering
     // - Door animations
     // - Particle effects
+  }
+
+  /**
+   * Updates camera position based on WASD input.
+   * @private
+   */
+  private updateCameraMovement(scene: BABYLON.Scene): void {
+    if (!this.camera) return;
+
+    const deltaTime = scene.getEngine().getDeltaTime() / 1000; // Convert to seconds
+    const moveDistance = this.cameraSpeed * deltaTime * 10; // Scale for good movement speed
+
+    // Calculate movement vector based on pressed keys
+    let moveX = 0;
+    let moveZ = 0;
+
+    if (this.movementKeys.w) moveZ -= moveDistance; // Forward (negative Z)
+    if (this.movementKeys.s) moveZ += moveDistance; // Backward (positive Z)
+    if (this.movementKeys.a) moveX -= moveDistance; // Left (negative X)
+    if (this.movementKeys.d) moveX += moveDistance; // Right (positive X)
+
+    // Apply movement to camera position
+    if (moveX !== 0 || moveZ !== 0) {
+      this.camera.position.x += moveX;
+      this.camera.position.z += moveZ;
+
+      // Maintain top-down orientation without changing target
+      this.camera.rotation.x = Math.PI / 2; // Always look straight down
+      this.camera.rotation.y = 0;
+      this.camera.rotation.z = 0;
+    }
   }
 
   /**
@@ -600,9 +811,11 @@ export class Scene3 implements GameScene {
       this.materials.wall.dispose();
       this.materials.floor.dispose();
       this.materials.door.dispose();
-      this.materials.ceiling.dispose();
       this.materials = null;
     }
+
+    // Reset movement keys
+    this.movementKeys = { w: false, a: false, s: false, d: false };
 
     // Reset references
     this.currentDungeon = undefined;

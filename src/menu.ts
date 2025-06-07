@@ -244,8 +244,8 @@ export class MenuSystem {
     this.updateActiveScene();
     this.updateFPSButtonText();
 
-    // Reset focus to first item when opening menu
-    this.focusedIndex = 0;
+    // Set focus to the currently active scene when opening menu
+    this.focusedIndex = this.getCurrentSceneIndex();
     this.updateFocusedItem();
   }
 
@@ -302,6 +302,23 @@ export class MenuSystem {
   public setCurrentScene(sceneId: string): void {
     this.currentScene = sceneId;
     this.updateActiveScene();
+  }
+
+  /**
+   * Gets the index of the currently active scene in the menu buttons array.
+   * @returns The index of the current scene, or 0 if not found
+   * @private
+   */
+  private getCurrentSceneIndex(): number {
+    const sceneButton = this.menuButtons.find(button =>
+      button.getAttribute('data-scene') === this.currentScene
+    );
+
+    if (sceneButton) {
+      return this.menuButtons.indexOf(sceneButton);
+    }
+
+    return 0; // Default to first item if current scene not found
   }
 
   private toggleFPS(): void {

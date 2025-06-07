@@ -192,6 +192,7 @@ export class DungeonGenerator {
   private rooms: Room[] = [];
   private tilemap: number[][] = [];
   private doors: Door[] = [];
+  private baseRooms: Room[] = []; // Store the initial room layout
 
   /**
    * Creates a new DungeonGenerator instance.
@@ -217,16 +218,26 @@ export class DungeonGenerator {
 
   /**
    * Generates a complete dungeon based on the configuration.
-   * 
+   *
+   * @param preserveBaseRooms - Whether to keep the same base room layout
    * @returns Complete dungeon data structure
    */
-  public generate(): DungeonData {
+  public generate(preserveBaseRooms: boolean = false): DungeonData {
     this.reset();
     this.initializeTilemap();
-    this.generateRooms();
+
+    if (preserveBaseRooms && this.baseRooms.length > 0) {
+      // Use existing base rooms and only regenerate connections
+      this.restoreBaseRooms();
+    } else {
+      // Generate new rooms and save them as base rooms
+      this.generateRooms();
+      this.saveBaseRooms();
+    }
+
     this.connectRooms();
     this.placeDoors();
-    
+
     return {
       metadata: {
         width: this.config.dungeonWidth,
@@ -238,6 +249,33 @@ export class DungeonGenerator {
       tilemap: this.tilemap.map(row => [...row]),
       doors: [...this.doors]
     };
+  }
+
+  /**
+   * Saves the current room layout as the base rooms.
+   * @private
+   */
+  private saveBaseRooms(): void {
+    this.baseRooms = this.rooms
+      .filter(room => room.type === 'room')
+      .map(room => ({
+        ...room,
+        connectedTo: [] // Reset connections
+      }));
+  }
+
+  /**
+   * Restores the base room layout.
+   * @private
+   */
+  private restoreBaseRooms(): void {
+    this.rooms = this.baseRooms.map(room => ({
+      ...room,
+      connectedTo: [] // Reset connections for new complexity level
+    }));
+
+    // Carve the restored rooms into the tilemap
+    this.carveRooms();
   }
 
   /**
@@ -645,7 +683,9 @@ export class DungeonGenerator {
           continue;
         }
 
-        const tentativeG = current.g + 1;
+        // Inside the A* loop where you calculate tentativeG
+        const moveCost = this.tilemap[neighbor.y][neighbor.x] === 1 ? 0.5 : 1; // Prefer existing floors
+        const tentativeG = current.g + moveCost;
 
         let existingNode = openSet.find(n => n.x === neighbor.x && n.y === neighbor.y);
 
@@ -720,13 +760,17 @@ export class DungeonGenerator {
 
   /**
    * Carves a corridor path into the tilemap.
+   * Creates corridors with the exact specified width.
    * @private
    */
   private carveCorridor(path: Point[]): void {
+    const width = this.config.corridorWidth;
+    const halfWidth = Math.floor((width - 1) / 2);
+
     for (const point of path) {
-      // Carve corridor with specified width
-      for (let dy = 0; dy < this.config.corridorWidth; dy++) {
-        for (let dx = 0; dx < this.config.corridorWidth; dx++) {
+      // Carve corridor with exact width
+      for (let dy = -halfWidth; dy < width - halfWidth; dy++) {
+        for (let dx = -halfWidth; dx < width - halfWidth; dx++) {
           const x = point.x + dx;
           const y = point.y + dy;
 
@@ -823,10 +867,21 @@ export class DungeonGenerator {
 
   /**
    * Checks if a tile is valid for pathfinding (not a wall in a room).
+   * Accounts for corridor width to ensure corridors don't extend beyond boundaries.
    * @private
    */
   private isValidPathTile(x: number, y: number): boolean {
-    if (!this.isValidTile(x, y)) return false;
+    const width = this.config.corridorWidth;
+    const halfWidth = Math.floor((width - 1) / 2);
+
+    // Check if the corridor with exact width would fit within bounds
+    for (let dy = -halfWidth; dy < width - halfWidth; dy++) {
+      for (let dx = -halfWidth; dx < width - halfWidth; dx++) {
+        if (!this.isValidTile(x + dx, y + dy)) {
+          return false;
+        }
+      }
+    }
 
     // Allow pathfinding through walls but prefer existing floors
     return true;
@@ -873,5 +928,27 @@ export class DungeonGenerator {
   public updateConfig(newConfig: Partial<DungeonConfig>): void {
     this.config = { ...this.config, ...newConfig };
     this.rng = new SeededRandom(this.config.seed);
+
+    // Clear base rooms if seed changes (new dungeon layout)
+    if (newConfig.seed !== undefined) {
+      this.clearBaseRooms();
+    }
+  }
+
+  /**
+   * Clears the saved base room layout.
+   * @public
+   */
+  public clearBaseRooms(): void {
+    this.baseRooms = [];
+  }
+
+  /**
+   * Checks if base rooms are available for preservation.
+   * @returns True if base rooms exist
+   * @public
+   */
+  public hasBaseRooms(): boolean {
+    return this.baseRooms.length > 0;
   }
 }

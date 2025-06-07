@@ -94,18 +94,21 @@ generator.updateConfig({
 const newDungeon = generator.generate();
 ```
 
-## Scene 4: Interactive Dungeon Explorer
+## Scene 3: Interactive Dungeon Explorer (Top-Down View)
 
 ### Controls
-- **G**: Generate new dungeon
-- **1-5**: Set complexity level (0.2 - 1.0)
-- **R**: Toggle visualization mode (full/wireframe/rooms)
-- **WASD**: Move camera
-- **Mouse**: Look around
+- **G**: Generate new dungeon (new layout, preserves camera position)
+- **1-5**: Set complexity level (0.2 - 1.0, preserves base rooms & camera position)
+- **R**: Toggle visualization mode (full/wireframe/rooms, preserves camera position)
+- **V**: Toggle walls visibility
+- **6-0**: Set corridor width (6=1, 7=2, 8=3, 9=4, 0=5, preserves base rooms & camera position)
+- **C**: Center camera on dungeon
+- **WASD**: Move camera (top-down navigation)
+- **Mouse wheel**: Zoom in/out
 
 ### Visualization Modes
 
-1. **Full Mode**: Complete 3D dungeon with walls, floors, ceilings, and doors
+1. **Full Mode**: Complete 3D dungeon with walls, floors, and doors (optimized for top-down view)
 2. **Wireframe Mode**: Room boundaries shown as green wireframes
 3. **Rooms Mode**: Colored blocks representing different room types
    - Green: Regular rooms
