@@ -282,6 +282,14 @@ export class Scene3 implements GameScene {
         }
       }));
 
+    // H key - Toggle legend visibility
+    scene.actionManager.registerAction(new BABYLON.ExecuteCodeAction(
+      BABYLON.ActionManager.OnKeyDownTrigger, (evt) => {
+        if (evt.sourceEvent.key === 'h' || evt.sourceEvent.key === 'H') {
+          this.toggleLegend();
+        }
+      }));
+
     // WASD movement controls
     this.setupWASDControls(scene);
 
@@ -338,11 +346,84 @@ export class Scene3 implements GameScene {
 
   /**
    * Creates UI instructions for the scene.
+   * Creates a visual legend showing all keyboard commands.
    * @private
    */
   private createUI(_scene: BABYLON.Scene): void {
-    // This would typically create GUI elements
-    // For now, we'll log the controls to console
+    // Create legend container
+    const legend = document.createElement('div');
+    legend.id = 'dungeon-legend';
+    legend.style.cssText = `
+      position: fixed;
+      top: 20px;
+      right: 20px;
+      background: rgba(0, 0, 0, 0.8);
+      color: white;
+      padding: 15px;
+      border-radius: 8px;
+      font-family: 'Courier New', monospace;
+      font-size: 12px;
+      line-height: 1.4;
+      z-index: 1000;
+      max-width: 300px;
+      border: 1px solid #444;
+      box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+    `;
+
+    // Create legend content
+    legend.innerHTML = `
+      <div style="font-size: 14px; font-weight: bold; margin-bottom: 10px; color: #4CAF50;">
+        🏰 Dungeon Generator Controls
+      </div>
+      <div style="margin-bottom: 8px;">
+        <span style="color: #FFD700;">Generation:</span><br>
+        <kbd>G</kbd> - Generate new dungeon<br>
+        <kbd>1-5</kbd> - Complexity (0.2 - 1.0)
+      </div>
+      <div style="margin-bottom: 8px;">
+        <span style="color: #FFD700;">Corridor Width:</span><br>
+        <kbd>6</kbd>=1 <kbd>7</kbd>=2 <kbd>8</kbd>=3 <kbd>9</kbd>=4 <kbd>0</kbd>=5
+      </div>
+      <div style="margin-bottom: 8px;">
+        <span style="color: #FFD700;">Visualization:</span><br>
+        <kbd>R</kbd> - Toggle mode (full/wireframe/rooms)<br>
+        <kbd>V</kbd> - Toggle walls visibility
+      </div>
+      <div style="margin-bottom: 8px;">
+        <span style="color: #FFD700;">Camera:</span><br>
+        <kbd>WASD</kbd> - Move camera<br>
+        <kbd>Mouse Wheel</kbd> - Zoom in/out<br>
+        <kbd>C</kbd> - Center on dungeon
+      </div>
+      <div style="margin-bottom: 8px;">
+        <span style="color: #FFD700;">Interface:</span><br>
+        <kbd>H</kbd> - Toggle this legend<br>
+        <kbd>ESC</kbd> - Open main menu
+      </div>
+      <div style="font-size: 10px; color: #888; margin-top: 8px;">
+        💡 Base rooms preserved when changing complexity/width
+      </div>
+    `;
+
+    // Add CSS for kbd styling
+    const style = document.createElement('style');
+    style.textContent = `
+      #dungeon-legend kbd {
+        background: #333;
+        border: 1px solid #555;
+        border-radius: 3px;
+        padding: 2px 4px;
+        font-size: 10px;
+        color: #fff;
+        margin: 0 1px;
+      }
+    `;
+    document.head.appendChild(style);
+
+    // Add legend to page
+    document.body.appendChild(legend);
+
+    // Also log to console for developers
     console.log('🎮 Dungeon Scene Controls (Top-Down View):');
     console.log('  G - Generate new dungeon (new layout, preserves camera)');
     console.log('  1-5 - Set complexity level (preserves rooms & camera)');
@@ -427,6 +508,18 @@ export class Scene3 implements GameScene {
    */
   private toggleWalls(): void {
     this.showWalls = !this.showWalls;
+  }
+
+  /**
+   * Toggles the legend visibility.
+   * @private
+   */
+  private toggleLegend(): void {
+    const legend = document.getElementById('dungeon-legend');
+    if (legend) {
+      legend.style.display = legend.style.display === 'none' ? 'block' : 'none';
+      console.log(`📋 Legend ${legend.style.display === 'none' ? 'hidden' : 'shown'}`);
+    }
   }
 
   /**
@@ -812,6 +905,12 @@ export class Scene3 implements GameScene {
       this.materials.floor.dispose();
       this.materials.door.dispose();
       this.materials = null;
+    }
+
+    // Remove legend from DOM
+    const legend = document.getElementById('dungeon-legend');
+    if (legend) {
+      legend.remove();
     }
 
     // Reset movement keys
