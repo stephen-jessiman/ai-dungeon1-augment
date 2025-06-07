@@ -48,6 +48,8 @@ export class Scene3 implements GameScene {
     wall: BABYLON.StandardMaterial;
     floor: BABYLON.StandardMaterial;
     door: BABYLON.StandardMaterial;
+    startRoom: BABYLON.StandardMaterial;
+    endRoom: BABYLON.StandardMaterial;
   } | null = null;
   
   /** Camera for first-person exploration */
@@ -90,10 +92,10 @@ export class Scene3 implements GameScene {
       minRooms: 3,
       maxRooms: 15,
       minRoomSize: 4,
-      maxRoomSize: 10,
+      maxRoomSize: 15,
       complexityLevel: 0.6,
       corridorWidth: 3,
-      overlapChance: 0.4,
+      overlapChance: 1,
       seed: Date.now()
     };
     
@@ -199,10 +201,24 @@ export class Scene3 implements GameScene {
     doorMaterial.specularColor = new BABYLON.Color3(0.2, 0.1, 0.05);
     doorMaterial.roughness = 0.7;
 
+    // Start room material - green for "go"
+    const startRoomMaterial = new BABYLON.StandardMaterial("startRoomMaterial", scene);
+    startRoomMaterial.diffuseColor = new BABYLON.Color3(0.2, 0.8, 0.2); // Bright green
+    startRoomMaterial.specularColor = new BABYLON.Color3(0.1, 0.4, 0.1);
+    startRoomMaterial.roughness = 0.6;
+
+    // End room material - red for "goal"
+    const endRoomMaterial = new BABYLON.StandardMaterial("endRoomMaterial", scene);
+    endRoomMaterial.diffuseColor = new BABYLON.Color3(0.8, 0.2, 0.2); // Bright red
+    endRoomMaterial.specularColor = new BABYLON.Color3(0.4, 0.1, 0.1);
+    endRoomMaterial.roughness = 0.6;
+
     this.materials = {
       wall: wallMaterial,
       floor: floorMaterial,
-      door: doorMaterial
+      door: doorMaterial,
+      startRoom: startRoomMaterial,
+      endRoom: endRoomMaterial
     };
   }
 
@@ -390,6 +406,11 @@ export class Scene3 implements GameScene {
         <kbd>V</kbd> - Toggle walls visibility
       </div>
       <div style="margin-bottom: 8px;">
+        <span style="color: #FFD700;">Room Types:</span><br>
+        <span style="color: #4CAF50;">🟢 Start Room</span> (furthest apart)<br>
+        <span style="color: #F44336;">🔴 End Room</span> (furthest apart)
+      </div>
+      <div style="margin-bottom: 8px;">
         <span style="color: #FFD700;">Camera:</span><br>
         <kbd>WASD</kbd> - Move camera<br>
         <kbd>Mouse Wheel</kbd> - Zoom in/out<br>
@@ -457,6 +478,14 @@ export class Scene3 implements GameScene {
 
     console.log(`Generated dungeon: ${this.currentDungeon.metadata.roomCount} rooms, ` +
                 `${this.currentDungeon.doors.length} doors`);
+
+    // Log start/end room information
+    if (this.currentDungeon.startRoom && this.currentDungeon.endRoom) {
+      console.log(`🟢 Start room: ${this.currentDungeon.startRoom.id} at (${this.currentDungeon.startRoom.x}, ${this.currentDungeon.startRoom.y})`);
+      console.log(`🔴 End room: ${this.currentDungeon.endRoom.id} at (${this.currentDungeon.endRoom.x}, ${this.currentDungeon.endRoom.y})`);
+    } else {
+      console.log('⚠️ Could not determine start/end rooms');
+    }
   }
 
   /**
@@ -470,6 +499,12 @@ export class Scene3 implements GameScene {
 
     console.log(`Generated dungeon with preserved rooms: ${this.currentDungeon.metadata.roomCount} rooms, ` +
                 `${this.currentDungeon.doors.length} doors`);
+
+    // Log start/end room information (should be recalculated)
+    if (this.currentDungeon.startRoom && this.currentDungeon.endRoom) {
+      console.log(`🟢 Start room: ${this.currentDungeon.startRoom.id} at (${this.currentDungeon.startRoom.x}, ${this.currentDungeon.startRoom.y})`);
+      console.log(`🔴 End room: ${this.currentDungeon.endRoom.id} at (${this.currentDungeon.endRoom.x}, ${this.currentDungeon.endRoom.y})`);
+    }
   }
 
   /**
@@ -668,36 +703,112 @@ export class Scene3 implements GameScene {
 
   /**
    * Creates floor meshes for walkable areas (optimized for top-down view).
+   * Uses special materials for start and end rooms.
    * @private
    */
   private createFloors(scene: BABYLON.Scene, tilemap: number[][], width: number, height: number): void {
-    if (!this.materials) return;
+    if (!this.materials || !this.currentDungeon) return;
 
-    // Create merged floor mesh for performance
-    const floorMeshes: BABYLON.Mesh[] = [];
+    // Create separate mesh arrays for different floor types
+    const regularFloorMeshes: BABYLON.Mesh[] = [];
+    const startRoomMeshes: BABYLON.Mesh[] = [];
+    const endRoomMeshes: BABYLON.Mesh[] = [];
 
     for (let y = 0; y < height; y++) {
       for (let x = 0; x < width; x++) {
         if (tilemap[y][x] === 1 || tilemap[y][x] === 2) { // Floor or door
+          // Determine which room this tile belongs to
+          const roomType = this.getRoomTypeAtPosition(x, y);
+
           // Create floor tile
           const floor = BABYLON.MeshBuilder.CreateGround(`floor_${x}_${y}`,
             { width: this.tileSize, height: this.tileSize }, scene);
           floor.position = new BABYLON.Vector3(x * this.tileSize, 0, y * this.tileSize);
-          floor.material = this.materials.floor;
           floor.receiveShadows = true;
-          floorMeshes.push(floor);
+
+          // Add to appropriate mesh array based on room type
+          switch (roomType) {
+            case 'start':
+              floor.material = this.materials.startRoom;
+              startRoomMeshes.push(floor);
+              break;
+            case 'end':
+              floor.material = this.materials.endRoom;
+              endRoomMeshes.push(floor);
+              break;
+            default:
+              floor.material = this.materials.floor;
+              regularFloorMeshes.push(floor);
+              break;
+          }
         }
       }
     }
 
     // Merge meshes for better performance
-    if (floorMeshes.length > 0) {
-      const mergedFloor = BABYLON.Mesh.MergeMeshes(floorMeshes);
-      if (mergedFloor) {
-        mergedFloor.name = "mergedFloor";
-        this.dungeonMeshes.push(mergedFloor);
+    this.mergeFloorMeshes(regularFloorMeshes, "mergedFloor");
+    this.mergeFloorMeshes(startRoomMeshes, "mergedStartRoomFloor");
+    this.mergeFloorMeshes(endRoomMeshes, "mergedEndRoomFloor");
+  }
+
+  /**
+   * Determines the room type (start/end/regular) at a given position.
+   * @private
+   */
+  private getRoomTypeAtPosition(x: number, y: number): 'start' | 'end' | 'regular' {
+    if (!this.currentDungeon?.startRoom || !this.currentDungeon?.endRoom) {
+      return 'regular';
+    }
+
+    // Check if position is within start room
+    const startRoom = this.currentDungeon.startRoom;
+    if (x >= startRoom.x && x < startRoom.x + startRoom.width &&
+        y >= startRoom.y && y < startRoom.y + startRoom.height) {
+      return 'start';
+    }
+
+    // Check if position is within end room
+    const endRoom = this.currentDungeon.endRoom;
+    if (x >= endRoom.x && x < endRoom.x + endRoom.width &&
+        y >= endRoom.y && y < endRoom.y + endRoom.height) {
+      return 'end';
+    }
+
+    return 'regular';
+  }
+
+  /**
+   * Merges floor meshes for performance optimization.
+   * @private
+   */
+  private mergeFloorMeshes(meshes: BABYLON.Mesh[], name: string): void {
+    if (meshes.length > 0) {
+      const merged = BABYLON.Mesh.MergeMeshes(meshes);
+      if (merged) {
+        merged.name = name;
+        this.dungeonMeshes.push(merged);
       }
     }
+  }
+
+  /**
+   * Determines the room type (start/end/regular) by room ID.
+   * @private
+   */
+  private getRoomTypeById(roomId: string): 'start' | 'end' | 'regular' {
+    if (!this.currentDungeon?.startRoom || !this.currentDungeon?.endRoom) {
+      return 'regular';
+    }
+
+    if (this.currentDungeon.startRoom.id === roomId) {
+      return 'start';
+    }
+
+    if (this.currentDungeon.endRoom.id === roomId) {
+      return 'end';
+    }
+
+    return 'regular';
   }
 
   /**
@@ -781,12 +892,26 @@ export class Scene3 implements GameScene {
 
   /**
    * Creates wireframe visualization for a room.
+   * Uses special colors for start and end rooms.
    * @private
    */
   private createRoomWireframe(scene: BABYLON.Scene, room: any): void {
-    const wireframeMaterial = new BABYLON.StandardMaterial("wireframe", scene);
+    const wireframeMaterial = new BABYLON.StandardMaterial(`wireframe_${room.id}`, scene);
     wireframeMaterial.wireframe = true;
-    wireframeMaterial.diffuseColor = new BABYLON.Color3(0, 1, 0);
+
+    // Set color based on room type
+    const roomType = this.getRoomTypeById(room.id);
+    switch (roomType) {
+      case 'start':
+        wireframeMaterial.diffuseColor = new BABYLON.Color3(0.2, 1, 0.2); // Bright green
+        break;
+      case 'end':
+        wireframeMaterial.diffuseColor = new BABYLON.Color3(1, 0.2, 0.2); // Bright red
+        break;
+      default:
+        wireframeMaterial.diffuseColor = new BABYLON.Color3(0, 1, 0); // Regular green
+        break;
+    }
 
     const roomMesh = BABYLON.MeshBuilder.CreateBox(`wireframe_${room.id}`, {
       width: room.width * this.tileSize,
@@ -805,22 +930,32 @@ export class Scene3 implements GameScene {
 
   /**
    * Creates colored block visualization for a room.
+   * Uses special colors for start and end rooms.
    * @private
    */
   private createRoomBlock(scene: BABYLON.Scene, room: any): void {
     const blockMaterial = new BABYLON.StandardMaterial(`block_${room.id}`, scene);
 
-    // Color based on room type
-    switch (room.type) {
-      case 'room':
-        blockMaterial.diffuseColor = new BABYLON.Color3(0.2, 0.8, 0.2);
-        break;
-      case 'corridor':
-        blockMaterial.diffuseColor = new BABYLON.Color3(0.8, 0.8, 0.2);
-        break;
-      case 'intersection':
-        blockMaterial.diffuseColor = new BABYLON.Color3(0.8, 0.2, 0.2);
-        break;
+    // Check if this is a start or end room first
+    const specialRoomType = this.getRoomTypeById(room.id);
+
+    if (specialRoomType === 'start') {
+      blockMaterial.diffuseColor = new BABYLON.Color3(0.2, 0.8, 0.2); // Bright green for start
+    } else if (specialRoomType === 'end') {
+      blockMaterial.diffuseColor = new BABYLON.Color3(0.8, 0.2, 0.2); // Bright red for end
+    } else {
+      // Color based on regular room type
+      switch (room.type) {
+        case 'room':
+          blockMaterial.diffuseColor = new BABYLON.Color3(0.4, 0.6, 0.4); // Muted green for regular rooms
+          break;
+        case 'corridor':
+          blockMaterial.diffuseColor = new BABYLON.Color3(0.8, 0.8, 0.2); // Yellow for corridors
+          break;
+        case 'intersection':
+          blockMaterial.diffuseColor = new BABYLON.Color3(0.6, 0.4, 0.8); // Purple for intersections
+          break;
+      }
     }
 
     blockMaterial.alpha = 0.7;
@@ -904,6 +1039,8 @@ export class Scene3 implements GameScene {
       this.materials.wall.dispose();
       this.materials.floor.dispose();
       this.materials.door.dispose();
+      this.materials.startRoom.dispose();
+      this.materials.endRoom.dispose();
       this.materials = null;
     }
 

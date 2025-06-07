@@ -109,25 +109,31 @@ export interface DungeonData {
   metadata: {
     /** Dungeon width in tiles */
     width: number;
-    
+
     /** Dungeon height in tiles */
     height: number;
-    
+
     /** Total number of rooms generated */
     roomCount: number;
-    
+
     /** Seed used for generation (if any) */
     generationSeed?: number;
   };
-  
+
   /** Array of all rooms and corridors */
   rooms: Room[];
-  
+
   /** 2D tilemap where 0=wall, 1=floor, 2=door */
   tilemap: number[][];
-  
+
   /** Array of all doors in the dungeon */
   doors: Door[];
+
+  /** Start room for gameplay (furthest apart rooms) */
+  startRoom?: Room;
+
+  /** End room for gameplay (furthest apart rooms) */
+  endRoom?: Room;
 }
 
 /**
@@ -238,6 +244,9 @@ export class DungeonGenerator {
     this.connectRooms();
     this.placeDoors();
 
+    // Calculate start and end rooms (furthest apart)
+    const { startRoom, endRoom } = this.calculateStartAndEndRooms();
+
     return {
       metadata: {
         width: this.config.dungeonWidth,
@@ -247,7 +256,9 @@ export class DungeonGenerator {
       },
       rooms: [...this.rooms],
       tilemap: this.tilemap.map(row => [...row]),
-      doors: [...this.doors]
+      doors: [...this.doors],
+      startRoom,
+      endRoom
     };
   }
 
@@ -950,5 +961,63 @@ export class DungeonGenerator {
    */
   public hasBaseRooms(): boolean {
     return this.baseRooms.length > 0;
+  }
+
+  /**
+   * Calculates start and end rooms based on furthest distance apart.
+   * Validates that there's a path between them.
+   * @returns Object containing start and end rooms, or undefined if no valid pair found
+   * @private
+   */
+  private calculateStartAndEndRooms(): { startRoom?: Room; endRoom?: Room } {
+    const actualRooms = this.rooms.filter(room => room.type === 'room');
+
+    if (actualRooms.length < 2) {
+      return { startRoom: undefined, endRoom: undefined };
+    }
+
+    let maxDistance = 0;
+    let bestStartRoom: Room | undefined;
+    let bestEndRoom: Room | undefined;
+
+    // Find the two rooms that are furthest apart
+    for (let i = 0; i < actualRooms.length; i++) {
+      for (let j = i + 1; j < actualRooms.length; j++) {
+        const room1 = actualRooms[i];
+        const room2 = actualRooms[j];
+
+        const center1 = this.getRoomCenter(room1);
+        const center2 = this.getRoomCenter(room2);
+        const distance = this.calculateDistance(center1, center2);
+
+        if (distance > maxDistance) {
+          // Validate that there's a path between these rooms
+          if (this.validatePathBetweenRooms(room1, room2)) {
+            maxDistance = distance;
+            bestStartRoom = room1;
+            bestEndRoom = room2;
+          }
+        }
+      }
+    }
+
+    return {
+      startRoom: bestStartRoom,
+      endRoom: bestEndRoom
+    };
+  }
+
+  /**
+   * Validates that there's a navigable path between two rooms.
+   * Uses a simplified pathfinding check.
+   * @private
+   */
+  private validatePathBetweenRooms(room1: Room, room2: Room): boolean {
+    const start = this.getRoomCenter(room1);
+    const end = this.getRoomCenter(room2);
+
+    // Use A* pathfinding to verify connectivity
+    const path = this.findPath(start, end);
+    return path.length > 0;
   }
 }
